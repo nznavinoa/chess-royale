@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chess Royale: Checkmate Arena</title>
+  <style>
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      font-family: Arial, sans-serif;
+    }
+    #ui {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: white;
+      background-color: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 5px;
+    }
+    #healthBar {
+      width: 100px;
+      height: 10px;
+      background-color: #333;
+      margin-top: 5px;
+    }
+    #health {
+      height: 100%;
+      background-color: #4CAF50;
+      width: 100%;
+    }
+    #cooldown {
+      height: 5px;
+      background-color: #2196F3;
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+    #gameInfo {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: white;
+      background-color: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div id="pieceInfo">Pawn (White)</div>
+    <div id="healthBar"><div id="health"></div></div>
+    <div id="cooldown"></div>
+    <div id="moveHelp" style="margin-top: 10px; font-size: 12px;">Click a piece to see valid moves</div>
+  </div>
+  <div id="gameInfo">
+    <div id="timer">Time: 0:00</div>
+    <div id="nextEvent">Next Event: 3:00</div>
+    <div id="activeEvents"></div>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/node_modules/three/build/three.module.js",
+        "three/addons/": "/node_modules/three/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
