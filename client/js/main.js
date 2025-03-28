@@ -1,7 +1,7 @@
 // main.js - Main entry point for the Chess Royale game
 
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { ChessPiece } from './pieces.js';
 import { createMap } from './map.js';
 import { Game } from './game.js';
@@ -10,7 +10,10 @@ import { ChessRules } from './chessRules.js';
 // Initialize scene, camera, and renderer
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ 
+  antialias: true,
+  powerPreference: 'high-performance'
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
@@ -18,15 +21,20 @@ document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 camera.position.set(0, 15, 15);
 controls.update();
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
 
-// Add lighting
+// Add lighting - simplified lighting to improve performance
 const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 directionalLight.position.set(5, 10, 5);
 scene.add(directionalLight);
 scene.add(new THREE.AmbientLight(0xF5E8C7, 0.4));
 
 // Set background color - sky color blend
-scene.background = new THREE.Color().setStyle('#87CEEB').lerp(new THREE.Color('#483D8B'), 0.5);
+scene.background = new THREE.Color('#1A1A3D'); // Deep Midnight Blue
+
+// Make scene globally accessible for other modules
+window.scene = scene;
 
 // Initialize game logic
 const game = new Game();
@@ -38,330 +46,463 @@ scene.add(createMap());
 // Store players
 const players = new Map();
 
-// Make scene globally accessible for other modules
-window.scene = scene;
+// Performance optimization - time tracking
+let lastUIUpdateTime = 0;
+const UI_UPDATE_INTERVAL = 250; // Update UI every 250ms
+let lastServerUpdateTime = 0;
+const SERVER_UPDATE_INTERVAL = 100; // Send updates to server every 100ms
 
-// Error handling for registerPiece
-if (typeof chessRules.registerPiece !== 'function') {
-  console.error("registerPiece method not found on chessRules instance!");
-  console.log("chessRules instance:", chessRules);
-  
-  // Add the method directly to the instance as a fallback
-  chessRules.registerPiece = function(id, pieceData) {
-    console.log("Using fallback registerPiece method");
-    if (!this.pieces) {
-      this.pieces = new Map();
-    }
-    
-    // Store the piece
-    this.pieces.set(id, {
-      ...pieceData,
-      id
-    });
-    
-    return this.pieces.get(id);
+// Define traditional chess positions (board coordinates 0-7)
+const traditionalPositions = {
+  'white': {
+    'pawn': [{x: 0, z: 6}, {x: 1, z: 6}, {x: 2, z: 6}, {x: 3, z: 6}, 
+             {x: 4, z: 6}, {x: 5, z: 6}, {x: 6, z: 6}, {x: 7, z: 6}],
+    'rook': [{x: 0, z: 7}, {x: 7, z: 7}],
+    'knight': [{x: 1, z: 7}, {x: 6, z: 7}],
+    'bishop': [{x: 2, z: 7}, {x: 5, z: 7}],
+    'queen': [{x: 3, z: 7}],
+    'king': [{x: 4, z: 7}]
+  },
+  'black': {
+    'pawn': [{x: 0, z: 1}, {x: 1, z: 1}, {x: 2, z: 1}, {x: 3, z: 1}, 
+             {x: 4, z: 1}, {x: 5, z: 1}, {x: 6, z: 1}, {x: 7, z: 1}],
+    'rook': [{x: 0, z: 0}, {x: 7, z: 0}],
+    'knight': [{x: 1, z: 0}, {x: 6, z: 0}],
+    'bishop': [{x: 2, z: 0}, {x: 5, z: 0}],
+    'queen': [{x: 3, z: 0}],
+    'king': [{x: 4, z: 0}]
+  }
+};
+
+// Function to convert board coordinates to scene coordinates
+function boardToScene(boardX, boardZ) {
+  return {
+    x: boardX - 3.5,
+    z: boardZ - 3.5
   };
 }
 
 // Set up socket.io connection
-const socket = io('http://localhost:3000');
+// Use empty io() to connect to the same origin that served the page
+let socket;
+try {
+  // This will be available if the socket.io script loaded correctly
+  socket = io();
+  window.socket = socket; // Make socket globally accessible
+  
+  console.log('Socket.IO initialized');
+  
+  setupSocketHandlers();
+} catch (e) {
+  console.error('Failed to initialize Socket.IO:', e);
+  document.getElementById('ui').innerHTML = 
+    '<div style="color: red; background: rgba(0,0,0,0.7); padding: 20px;">Failed to connect to game server. Please try refreshing the page.</div>';
+}
 
-socket.on('connect', () => {
-  console.log('Connected to server with ID:', socket.id);
-  
-  // Assign random piece type and team
-  const pieceTypes = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'];
-  const randomPieceType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
-  const randomTeam = Math.random() > 0.5 ? 'white' : 'black';
-  
-  // Create a new piece for this player
-  const piece = new ChessPiece(randomPieceType, randomTeam, socket.id);
-  players.set(socket.id, piece);
-  scene.add(piece.mesh);
-  
-  // Set initial position
-  const initialPosition = { 
-    x: Math.floor(Math.random() * 8), 
-    z: Math.floor(Math.random() * 8) 
-  };
-  piece.mesh.position.set(initialPosition.x, 1, initialPosition.z);
-  
-  // Register the piece with chess rules
-  console.log("About to register piece:", socket.id, {
-    type: randomPieceType,
-    team: randomTeam,
-    position: initialPosition,
-    hp: piece.hp
-  });
-  
-  try {
-    chessRules.registerPiece(socket.id, {
-      type: randomPieceType,
-      team: randomTeam,
-      position: initialPosition,
-      hp: piece.hp
-    });
-    console.log("Successfully registered piece");
-  } catch (error) {
-    console.error("Error registering piece:", error);
-  }
-  
-  // Notify server about the new piece
-  socket.emit('register', {
-    id: socket.id,
-    type: randomPieceType,
-    team: randomTeam,
-    position: initialPosition,
-    hp: piece.hp
-  });
-});
-
-// Handle updates from server
-socket.on('update', (serverPlayers) => {
-  console.log("Received update from server:", serverPlayers);
-  
-  // Convert the object back to a Map if needed
-  const playerData = serverPlayers instanceof Map ? 
-    serverPlayers : new Map(Object.entries(serverPlayers));
-  
-  playerData.forEach((p, id) => {
-    let piece = players.get(id);
+// Setup socket event handlers
+function setupSocketHandlers() {
+  socket.on('connect', () => {
+    console.log('Connected to server with ID:', socket.id);
     
-    // If this is a new player we haven't seen before
-    if (!piece && p.hp > 0) {
-      // Create new piece object
-      piece = new ChessPiece(p.type || 'pawn', p.team || 'white', id);
-      players.set(id, piece);
-      scene.add(piece.mesh);
-      
-      // Add metadata to the mesh for raycasting
-      piece.mesh.userData.pieceId = id;
-      
-      // Register with chess rules
-      try {
-        chessRules.registerPiece(id, {
-          type: p.type || 'pawn',
-          team: p.team || 'white',
-          position: p.position,
-          hp: p.hp
-        });
-      } catch (error) {
-        console.error("Error registering piece from server update:", error);
-      }
+    // Ask server for piece assignment
+    socket.emit('requestPieceAssignment', { id: socket.id });
+  });
+
+  // Handle piece assignment from server
+  socket.on('pieceAssignment', (data) => {
+    if (!data.type || !data.team || !data.position) {
+      console.error("Invalid piece assignment data:", data);
+      return;
     }
     
-    if (piece) {
-      // Update position
-      if (p.position) {
-        piece.mesh.position.set(p.position.x, 1, p.position.z);
+    console.log(`Assigned ${data.team} ${data.type} at position (${data.position.x}, ${data.position.z})`);
+    
+    // Update UI to show player info
+    document.getElementById('pieceInfo').textContent = 
+      `${data.type.charAt(0).toUpperCase() + data.type.slice(1)} (${data.team})`;
+    
+    // Create new piece with assigned type and team
+    const piece = new ChessPiece(data.type, data.team, socket.id);
+    players.set(socket.id, piece);
+    scene.add(piece.mesh);
+    
+    // Position the piece on the board (convert board coordinates to scene coordinates)
+    const scenePos = boardToScene(data.position.x, data.position.z);
+    piece.mesh.position.set(scenePos.x, 1, scenePos.z);
+    
+    // Register the piece with chess rules
+    try {
+      chessRules.registerPiece(socket.id, {
+        type: data.type,
+        team: data.team,
+        position: data.position,
+        hp: piece.hp
+      });
+    } catch (error) {
+      console.error("Error registering piece:", error);
+    }
+    
+    // Confirm registration with server
+    socket.emit('confirmPieceAssignment', {
+      id: socket.id,
+      type: data.type,
+      team: data.team,
+      position: data.position,
+      hp: piece.hp
+    });
+  });
+
+  // Handle updates from server
+  socket.on('update', (serverPlayers) => {
+    // Process each player data from the server
+    for (const [id, p] of Object.entries(serverPlayers)) {
+      let piece = players.get(id);
+      
+      // If this is a new player we haven't seen before
+      if (!piece && p && p.hp > 0) {
+        // Create new piece object (ensure we have valid type and team)
+        const pieceType = p.type || 'pawn';
+        const pieceTeam = p.team || 'white';
         
-        // Update position in chess rules
+        piece = new ChessPiece(pieceType, pieceTeam, id);
+        players.set(id, piece);
+        scene.add(piece.mesh);
+        
+        // Add metadata to the mesh for raycasting
+        piece.mesh.userData.pieceId = id;
+        
+        // Register with chess rules
         try {
-          chessRules.updatePiecePosition(id, p.position);
+          chessRules.registerPiece(id, {
+            type: pieceType,
+            team: pieceTeam,
+            position: p.position || { x: 0, z: 0 },
+            hp: p.hp
+          });
         } catch (error) {
-          console.error("Error updating piece position:", error);
+          console.error("Error registering piece from server update:", error);
         }
       }
       
-      // Update health
-      piece.hp = p.hp;
-      
-      // Remove if dead
-      if (p.hp <= 0) {
-        scene.remove(piece.mesh);
-        players.delete(id);
+      if (piece && p) {
+        // Update position
+        if (p.position) {
+          // Convert from board coordinates (0-7) to scene coordinates (-3.5 to 3.5)
+          const scenePos = boardToScene(p.position.x, p.position.z);
+          piece.mesh.position.set(scenePos.x, 1, scenePos.z);
+          
+          // Update position in chess rules
+          try {
+            chessRules.updatePiecePosition(id, p.position);
+          } catch (error) {
+            console.error("Error updating piece position:", error);
+          }
+        }
+        
+        // Update health
+        piece.hp = p.hp;
+        
+        // Remove if dead
+        if (p.hp <= 0) {
+          scene.remove(piece.mesh);
+          players.delete(id);
+        }
       }
     }
   });
-});
+
+  // Handle other socket events
+  socket.on('gameEvent', (eventData) => {
+    console.log("Game event received:", eventData);
+    // Update UI to show event
+    document.getElementById('activeEvents').innerHTML = 
+      `<div>${eventData.eventType || 'Game event'} activated!</div>` + document.getElementById('activeEvents').innerHTML;
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Disconnected from server');
+    document.getElementById('ui').innerHTML = 
+      '<div style="color: red; background: rgba(0,0,0,0.7); padding: 20px;">Connection lost. Please refresh the page.</div>';
+  });
+}
+
+// Game state for player movement
+const playerMovement = {
+  moveDirection: new THREE.Vector3(),
+  moving: false,
+  keysPressed: { w: false, a: false, s: false, d: false },
+  targetPosition: null
+};
 
 // Handle player movement with keyboard
 document.addEventListener('keydown', (e) => {
+  // Only track the keys we care about
+  if (!['w', 'a', 's', 'd', ' '].includes(e.key)) return;
+  
+  // Return if socket not initialized
+  if (!socket) return;
+  
   const player = players.get(socket.id);
   if (!player) return;
   
-  const pos = player.mesh.position.clone();
-  let moved = false;
-  
-  // Movement keys
-  if (e.key === 'w') { pos.z -= 1; moved = true; }
-  if (e.key === 's') { pos.z += 1; moved = true; }
-  if (e.key === 'a') { pos.x -= 1; moved = true; }
-  if (e.key === 'd') { pos.x += 1; moved = true; }
-  
-  if (moved) {
-    // Get the current piece data from chess rules
-    const newPosition = { x: pos.x, z: pos.z };
-    const piece = chessRules.getPieceById(socket.id);
+  if (e.key === 'w' || e.key === 'a' || e.key === 's' || e.key === 'd') {
+    // Track key state
+    playerMovement.keysPressed[e.key] = true;
     
-    let canMove = true;
-    
-    // If chess rules are active, validate move
-    if (piece && piece.position) {
-      try {
-        const validMoves = chessRules.getValidMoves(piece.position);
-        canMove = validMoves.some(move => 
-          move.x === newPosition.x && move.z === newPosition.z
-        );
-      } catch (error) {
-        console.error("Error getting valid moves:", error);
-        canMove = true; // Allow move if error in validation
-      }
-    }
-    
-    if (canMove && chessRules.isValidPosition(newPosition)) {
-      // Update position locally first for responsive feel
-      player.mesh.position.set(newPosition.x, 1, newPosition.z);
-      
-      // Update in chess rules
-      if (piece) {
-        try {
-          chessRules.updatePiecePosition(socket.id, newPosition);
-        } catch (error) {
-          console.error("Error updating position:", error);
-        }
-      }
-      
-      // Send move to server
-      socket.emit('move', { 
-        id: socket.id, 
-        position: newPosition 
-      });
-    }
+    // Calculate movement direction
+    updateMoveDirection();
   }
   
   // Use ability with spacebar
   if (e.key === ' ') {
+    const currentPos = player.mesh.position.clone();
+    const boardX = Math.round(currentPos.x + 3.5);
+    const boardZ = Math.round(currentPos.z + 3.5);
+    
     const targetPos = { 
-      x: Math.round(pos.x), 
-      z: Math.round(pos.z + 1) 
+      x: currentPos.x, 
+      z: currentPos.z + 1 
     };
     
+    // Visual feedback for ability usage
     player.useAbility(targetPos);
+    
+    // Send to server
     socket.emit('ability', { 
       id: socket.id, 
-      target: targetPos, 
+      target: { 
+        x: boardX, 
+        z: boardZ + 1 
+      }, 
       damage: player.getAbilityDamage() 
     });
   }
 });
 
-// Function to show move guides
-function showMoveGuides(position) {
-  // Clear any existing guides
-  clearMoveGuides();
+document.addEventListener('keyup', (e) => {
+  // Only track the keys we care about
+  if (!['w', 'a', 's', 'd'].includes(e.key)) return;
   
-  // Get valid moves
-  let validMoves = [];
+  // Reset key state
+  playerMovement.keysPressed[e.key] = false;
   
-  try {
-    validMoves = chessRules.getValidMoves(position);
-  } catch (error) {
-    console.error("Error getting valid moves for guides:", error);
-    return;
+  // Update movement direction
+  updateMoveDirection();
+});
+
+// Update player movement direction based on keys pressed
+function updateMoveDirection() {
+  playerMovement.moveDirection.set(0, 0, 0);
+  
+  if (playerMovement.keysPressed.w) playerMovement.moveDirection.z -= 1;
+  if (playerMovement.keysPressed.s) playerMovement.moveDirection.z += 1;
+  if (playerMovement.keysPressed.a) playerMovement.moveDirection.x -= 1;
+  if (playerMovement.keysPressed.d) playerMovement.moveDirection.x += 1;
+  
+  // Normalize to prevent faster diagonal movement
+  if (playerMovement.moveDirection.length() > 0) {
+    playerMovement.moveDirection.normalize();
+    playerMovement.moving = true;
+  } else {
+    playerMovement.moving = false;
+  }
+}
+
+// Updates player position based on current movement
+function updatePlayerPosition(delta) {
+  if (!socket || !playerMovement.moving) return;
+  
+  const player = players.get(socket.id);
+  if (!player) return;
+  
+  // Get current position in scene coordinates
+  const currentPos = player.mesh.position.clone();
+  
+  // Calculate target position (snap to grid)
+  if (!playerMovement.targetPosition) {
+    // Convert current position to board coordinates (0-7)
+    const boardX = Math.round(currentPos.x + 3.5);
+    const boardZ = Math.round(currentPos.z + 3.5);
+    
+    // Calculate new position based on movement direction
+    const newBoardX = boardX + Math.round(playerMovement.moveDirection.x);
+    const newBoardZ = boardZ + Math.round(playerMovement.moveDirection.z);
+    
+    // Check board boundaries
+    if (newBoardX < 0 || newBoardX > 7 || newBoardZ < 0 || newBoardZ > 7) {
+      return; // Out of bounds
+    }
+    
+    // Set target position
+    const scenePos = boardToScene(newBoardX, newBoardZ);
+    playerMovement.targetPosition = new THREE.Vector3(scenePos.x, 1, scenePos.z);
+    
+    // Send move to server (only when we start moving to a new position)
+    socket.emit('move', { 
+      id: socket.id, 
+      position: { x: newBoardX, z: newBoardZ }
+    });
   }
   
-  // Create visual indicators for valid moves
-  validMoves.forEach(move => {
-    // Create a guide indicator (e.g., a circle)
-    const guideGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 16);
-    const guideMaterial = new THREE.MeshBasicMaterial({ 
-      color: 0x00ff00, 
-      transparent: true, 
-      opacity: 0.6 
-    });
-    const guide = new THREE.Mesh(guideGeometry, guideMaterial);
-    guide.position.set(move.x, 0.2, move.z);
-    guide.userData.isMoveGuide = true;
+  // Move towards target position (smooth movement)
+  if (playerMovement.targetPosition) {
+    const moveSpeed = 5 * delta; // Movement speed (adjust as needed)
     
-    // Add to scene
-    scene.add(guide);
-  });
-}
-
-// Function to clear move guides
-function clearMoveGuides() {
-  // Find and remove all guide objects from the scene
-  const guidesToRemove = [];
-  scene.traverse(child => {
-    if (child.userData && child.userData.isMoveGuide) {
-      guidesToRemove.push(child);
-    }
-  });
-  
-  guidesToRemove.forEach(guide => {
-    scene.remove(guide);
-  });
-}
-
-// Handle board click to show valid moves
-renderer.domElement.addEventListener('click', (event) => {
-  // Calculate mouse position and raycasting
-  const mouse = new THREE.Vector2();
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-  
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(mouse, camera);
-  
-  // Find intersected objects
-  const intersects = raycaster.intersectObjects(scene.children, true);
-  
-  if (intersects.length > 0) {
-    // Get the first intersected object
-    const intersect = intersects[0].object;
+    // Calculate direction to target
+    const moveVec = playerMovement.targetPosition.clone().sub(currentPos);
+    const distance = moveVec.length();
     
-    // Traverse up to find the root mesh that might have userData
-    let targetObject = intersect;
-    while (targetObject && !targetObject.userData?.pieceId) {
-      targetObject = targetObject.parent;
-    }
-    
-    // Check if it's a chess piece
-    if (targetObject && targetObject.userData && targetObject.userData.pieceId) {
-      const piece = chessRules.getPieceById(targetObject.userData.pieceId);
-      if (piece) {
-        // Show valid moves for this piece
-        showMoveGuides(piece.position);
-      }
+    if (distance < 0.05) {
+      // We've reached the target - snap to exact position
+      player.mesh.position.copy(playerMovement.targetPosition);
+      playerMovement.targetPosition = null;
     } else {
-      // If clicking on the board, clear guides
-      clearMoveGuides();
+      // Move towards target
+      moveVec.normalize().multiplyScalar(Math.min(moveSpeed, distance));
+      player.mesh.position.add(moveVec);
+    }
+  }
+}
+
+// Update health UI (throttled to improve performance)
+function updateHealthUI(time) {
+  // Only update UI periodically, not every frame
+  if (time - lastUIUpdateTime < UI_UPDATE_INTERVAL) return;
+  lastUIUpdateTime = time;
+  
+  // Safely update health UI, handling potential errors
+  try {
+    if (socket && players.get(socket.id)) {
+      const playerPiece = players.get(socket.id);
       
-      // Check if it's a move guide
-      if (intersect.userData && intersect.userData.isMoveGuide) {
-        // Get the position of the guide
-        const movePosition = { 
-          x: intersect.position.x, 
-          z: intersect.position.z 
-        };
+      // Make sure we have valid HP values to avoid NaN
+      const maxHp = playerPiece.getInitialHP();
+      const safeHp = playerPiece.hp;
+      const healthPercent = Math.min(100, Math.max(0, (safeHp / maxHp) * 100));
+      
+      const healthBar = document.getElementById('health');
+      if (healthBar) {
+        healthBar.style.width = `${healthPercent}%`;
         
-        // Move the player's piece to this position if it's our turn
-        const playerPiece = players.get(socket.id);
-        if (playerPiece) {
-          // Update locally
-          playerPiece.mesh.position.set(movePosition.x, 1, movePosition.z);
-          
-          // Update in chess rules
-          try {
-            chessRules.updatePiecePosition(socket.id, movePosition);
-          } catch (error) {
-            console.error("Error updating position after guide click:", error);
-          }
-          
-          // Send to server
-          socket.emit('move', { 
-            id: socket.id, 
-            position: movePosition 
-          });
-          
-          // Clear guides after moving
-          clearMoveGuides();
+        // Change color based on health
+        if (healthPercent > 60) {
+          healthBar.style.backgroundColor = '#4CAF50'; // Green
+        } else if (healthPercent > 30) {
+          healthBar.style.backgroundColor = '#FFC107'; // Yellow
+        } else {
+          healthBar.style.backgroundColor = '#F44336'; // Red
         }
       }
+      
+      // Update cooldown
+      const ability = playerPiece.getAbilityDetails();
+      updateCooldownUI(playerPiece.cooldown, ability.cooldown);
     }
+  } catch (error) {
+    console.error("Error updating health UI:", error);
   }
-});
+}
+
+// Update cooldown UI
+function updateCooldownUI(cooldown, maxCooldown) {
+  try {
+    if (isNaN(cooldown) || isNaN(maxCooldown) || maxCooldown <= 0) {
+      return;
+    }
+    
+    const cooldownPercent = Math.min(100, Math.max(0, (cooldown / maxCooldown) * 100));
+    const cooldownBar = document.getElementById('cooldown');
+    
+    if (cooldownBar) {
+      cooldownBar.style.width = `${cooldownPercent}%`;
+    }
+  } catch (error) {
+    console.error("Error updating cooldown UI:", error);
+  }
+}
+
+// Update game timer
+function updateGameTimer(time) {
+  // Only update UI periodically, not every frame
+  if (time - lastUIUpdateTime < UI_UPDATE_INTERVAL) return;
+  
+  try {
+    const minutes = Math.floor(game.time / 60);
+    const seconds = Math.floor(game.time % 60);
+    
+    const timerElement = document.getElementById('timer');
+    if (timerElement) {
+      timerElement.textContent = `Time: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+    
+    // Calculate time to next event
+    if (game && game.settings && game.eventTimer !== undefined) {
+      const nextEventTime = Math.floor((game.settings.eventInterval - game.eventTimer) / 60);
+      const nextEventSeconds = Math.floor((game.settings.eventInterval - game.eventTimer) % 60);
+      
+      const nextEventElement = document.getElementById('nextEvent');
+      if (nextEventElement) {
+        nextEventElement.textContent = 
+          `Next Event: ${nextEventTime}:${nextEventSeconds < 10 ? '0' : ''}${nextEventSeconds}`;
+      }
+    }
+  } catch (error) {
+    console.error("Error updating game timer:", error);
+  }
+}
+
+// Animation loop with performance optimizations
+let time = 0;
+let lastTime = 0;
+function animate(timestamp) {
+  requestAnimationFrame(animate);
+  
+  // Calculate delta time for smooth animations regardless of frame rate
+  const delta = (timestamp - lastTime) / 1000; // Convert to seconds
+  lastTime = timestamp;
+  
+  // Cap delta time to prevent huge jumps if tab was inactive
+  const cappedDelta = Math.min(delta, 0.1);
+  
+  // Update time
+  time += cappedDelta;
+  
+  // Update game logic
+  game.update(cappedDelta);
+  
+  // Update player position based on movement
+  updatePlayerPosition(cappedDelta);
+  
+  // Update UI (throttled)
+  updateHealthUI(time);
+  updateGameTimer(time);
+  
+  // Animate all visible pieces (with frustum culling)
+  const frustum = new THREE.Frustum().setFromProjectionMatrix(
+    new THREE.Matrix4().multiplyMatrices(
+      camera.projectionMatrix, 
+      camera.matrixWorldInverse
+    )
+  );
+  
+  players.forEach(piece => {
+    // Skip animation for pieces outside the camera view
+    if (!piece || !piece.mesh) return;
+    
+    // Only animate pieces in view
+    if (frustum.containsPoint(piece.mesh.position)) {
+      if (piece.animate) {
+        piece.animate(cappedDelta, time);
+      }
+    }
+  });
+  
+  // Update controls
+  controls.update();
+  
+  // Render scene
+  renderer.render(scene, camera);
+}
 
 // Handle window resize
 window.addEventListener('resize', () => {
@@ -370,111 +511,8 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Animation loop
-let time = 0;
-function animate() {
-  requestAnimationFrame(animate);
-  time += 0.05;
-  
-  // Update game logic
-  game.update(0.05);
-  
-  // Animate all pieces
-  players.forEach(piece => {
-    if (piece.animate) {
-      piece.animate(time);
-    }
-  });
-  
-  // Animate event effects
-  animateEffects(time);
-  
-  // Render scene
-  renderer.render(scene, camera);
-}
+// Export traditional positions for other modules to use
+window.traditionalPositions = traditionalPositions;
 
-// Animate event effects
-function animateEffects(time) {
-  // Find all effect objects in the scene
-  scene.traverse(object => {
-    if (!object.userData) return;
-    
-    // Animate falling petals
-    if (object.userData.fallSpeed) {
-      // Move down
-      object.position.y -= object.userData.fallSpeed * 0.05;
-      
-      // Swaying motion
-      object.position.x += Math.sin(time * object.userData.swaySpeed) * object.userData.swayAmount * 0.05;
-      
-      // Rotate
-      object.rotation.x += object.userData.rotateSpeed;
-      object.rotation.z += object.userData.rotateSpeed;
-      
-      // Remove if below ground
-      if (object.position.y < 0) {
-        scene.remove(object);
-      }
-    }
-    
-    // Animate king's call aura
-    if (object.userData.type === 'kingsCallAura') {
-      // Calculate lifetime progress (0-1)
-      const elapsed = time - object.userData.startTime;
-      const progress = elapsed / object.userData.lifetime;
-      
-      // Expand and fade
-      const scale = 1 + progress * 2;
-      object.scale.set(scale, scale, scale);
-      
-      if (object.material) {
-        object.material.opacity = 0.5 * (1 - progress);
-      }
-      
-      // Remove when expired
-      if (progress >= 1) {
-        scene.remove(object);
-      }
-    }
-    
-    // Animate damage effect particles
-    if (object.userData.velocity) {
-      // Move according to velocity
-      object.position.x += object.userData.velocity.x;
-      object.position.y += object.userData.velocity.y;
-      object.position.z += object.userData.velocity.z;
-      
-      // Add gravity
-      object.userData.velocity.y -= 0.01;
-      
-      // Reduce lifetime
-      object.userData.lifetime -= 0.05;
-      
-      // Fade out
-      if (object.material) {
-        object.material.opacity = object.userData.lifetime;
-      }
-      
-      // Remove if expired
-      if (object.userData.lifetime <= 0) {
-        if (object.parent) {
-          object.parent.remove(object);
-        } else {
-          scene.remove(object);
-        }
-      }
-    }
-    
-    // Animate loot items
-    if (object.userData.lootId) {
-      // Floating motion
-      object.position.y = 0.5 + Math.sin(time * 2) * 0.1;
-      
-      // Slow rotation
-      object.rotation.y += 0.02;
-    }
-  });
-}
-
-// Start animation loop
-animate();
+// Start animation loop with timestamp
+animate(0);

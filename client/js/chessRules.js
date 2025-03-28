@@ -1,7 +1,8 @@
 // ChessRules.js - Chess logic implementation
 
-class ChessRules {
+export class ChessRules {
   constructor(boardState) {
+    // Initialize with empty 8x8 board if not provided
     this.boardState = boardState || Array(8).fill().map(() => Array(8).fill(null));
     this.pieces = new Map(); // Store all pieces by their ID
   }
@@ -20,7 +21,10 @@ class ChessRules {
    * @param {Object} pieceData - Data about the piece (type, team, position)
    */
   registerPiece(id, pieceData) {
-    if (!id || !pieceData) return;
+    if (!id || !pieceData) {
+      console.error("Invalid piece data:", id, pieceData);
+      return null;
+    }
     
     // Store the piece in our pieces map
     this.pieces.set(id, {
@@ -35,21 +39,28 @@ class ChessRules {
         pieceData.team) {
       
       // Initialize board state if needed
-      if (!this.boardState || !Array.isArray(this.boardState)) {
+      if (!this.boardState) {
         this.boardState = Array(8).fill().map(() => Array(8).fill(null));
       }
       
-      // Make sure the row exists
-      if (!this.boardState[pieceData.position.z]) {
-        this.boardState[pieceData.position.z] = Array(8).fill(null);
+      // Ensure the board has all rows initialized
+      for (let i = 0; i < 8; i++) {
+        if (!this.boardState[i]) {
+          this.boardState[i] = Array(8).fill(null);
+        }
       }
       
       // Place the piece on the board
-      this.boardState[pieceData.position.z][pieceData.position.x] = {
-        id,
-        type: pieceData.type,
-        team: pieceData.team
-      };
+      const z = pieceData.position.z;
+      const x = pieceData.position.x;
+      
+      if (z >= 0 && z < 8 && x >= 0 && x < 8) {
+        this.boardState[z][x] = {
+          id,
+          type: pieceData.type,
+          team: pieceData.team
+        };
+      }
     }
     
     return this.pieces.get(id);
@@ -78,25 +89,61 @@ class ChessRules {
     
     // Remove from old position
     if (piece.position && this.isValidPosition(piece.position)) {
-      if (this.boardState[piece.position.z] && this.boardState[piece.position.z][piece.position.x]) {
-        this.boardState[piece.position.z][piece.position.x] = null;
+      const oldZ = piece.position.z;
+      const oldX = piece.position.x;
+      
+      if (oldZ >= 0 && oldZ < 8 && oldX >= 0 && oldX < 8 && 
+          this.boardState[oldZ] && this.boardState[oldZ][oldX]) {
+        this.boardState[oldZ][oldX] = null;
       }
     }
     
     // Update position in the piece data
-    piece.position = newPosition;
-    
-    // Add to new position on board
-    if (!this.boardState[newPosition.z]) {
-      this.boardState[newPosition.z] = Array(8).fill(null);
-    }
-    this.boardState[newPosition.z][newPosition.x] = {
-      id,
-      type: piece.type,
-      team: piece.team
+    piece.position = {
+      x: newPosition.x,
+      z: newPosition.z
     };
     
+    // Make sure the board is initialized
+    this.ensureBoardInitialized();
+    
+    // Add to new position on board
+    const z = newPosition.z;
+    const x = newPosition.x;
+    
+    if (z >= 0 && z < 8 && x >= 0 && x < 8) {
+      this.boardState[z][x] = {
+        id,
+        type: piece.type,
+        team: piece.team
+      };
+    }
+    
     return true;
+  }
+  
+  /**
+   * Ensure the board is fully initialized
+   */
+  ensureBoardInitialized() {
+    if (!this.boardState || !Array.isArray(this.boardState)) {
+      this.boardState = Array(8).fill().map(() => Array(8).fill(null));
+      return;
+    }
+    
+    // Ensure all rows exist
+    for (let z = 0; z < 8; z++) {
+      if (!this.boardState[z] || !Array.isArray(this.boardState[z])) {
+        this.boardState[z] = Array(8).fill(null);
+      } else {
+        // Ensure all cells in the row exist
+        for (let x = 0; x < 8; x++) {
+          if (this.boardState[z][x] === undefined) {
+            this.boardState[z][x] = null;
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -128,21 +175,26 @@ class ChessRules {
       return [];
     }
 
-    switch (piece.type.toLowerCase()) {
-      case 'pawn':
-        return this.getPawnMoves(position, piece.team);
-      case 'rook':
-        return this.getRookMoves(position, piece.team);
-      case 'knight':
-        return this.getKnightMoves(position, piece.team);
-      case 'bishop':
-        return this.getBishopMoves(position, piece.team);
-      case 'queen':
-        return this.getQueenMoves(position, piece.team);
-      case 'king':
-        return this.getKingMoves(position, piece.team);
-      default:
-        return [];
+    try {
+      switch (piece.type.toLowerCase()) {
+        case 'pawn':
+          return this.getPawnMoves(position, piece.team);
+        case 'rook':
+          return this.getRookMoves(position, piece.team);
+        case 'knight':
+          return this.getKnightMoves(position, piece.team);
+        case 'bishop':
+          return this.getBishopMoves(position, piece.team);
+        case 'queen':
+          return this.getQueenMoves(position, piece.team);
+        case 'king':
+          return this.getKingMoves(position, piece.team);
+        default:
+          return [];
+      }
+    } catch (error) {
+      console.error("Error getting valid moves:", error);
+      return [];
     }
   }
 
@@ -156,17 +208,16 @@ class ChessRules {
       return null;
     }
     
-    // Ensure boardState is properly initialized
-    if (!this.boardState || !Array.isArray(this.boardState)) {
-      return null;
+    this.ensureBoardInitialized();
+    
+    const z = position.z;
+    const x = position.x;
+    
+    if (z >= 0 && z < 8 && x >= 0 && x < 8) {
+      return this.boardState[z][x];
     }
     
-    // Make sure we access valid indices
-    if (!this.boardState[position.z] || !this.boardState[position.z][position.x]) {
-      return null;
-    }
-    
-    return this.boardState[position.z][position.x];
+    return null;
   }
 
   /**
@@ -388,5 +439,3 @@ class ChessRules {
     return moves;
   }
 }
-
-export { ChessRules };

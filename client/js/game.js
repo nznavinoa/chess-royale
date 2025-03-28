@@ -429,13 +429,11 @@ export class Game {
    * Create a visual effect for falling petals (Petal Rain event)
    */
   createFallingPetal() {
-    // Only create if we have scene access
     if (typeof scene === 'undefined' || !this.eventContainer) return;
     
-    // Create petal geometry
     const petalGeometry = new THREE.CircleGeometry(0.2, 5);
     const petalMaterial = new THREE.MeshBasicMaterial({
-      color: Math.random() > 0.5 ? 0xFFCFDF : 0xFF69B4,
+      color: Math.random() > 0.5 ? 0xFF007F : 0x00FFC1, // Alternate between Vivid Magenta and Neon Teal
       transparent: true,
       opacity: 0.7,
       side: THREE.DoubleSide
@@ -530,17 +528,15 @@ export class Game {
    * @param {Object} position - Position {x, z}
    */
   createVineBeastMesh(id, position) {
-    // Only create if we have scene access
     if (typeof scene === 'undefined') return;
     
-    // Create a group for the vine beast
     const vineBeast = new THREE.Group();
     vineBeast.userData = { entityId: id, type: 'vineBeast' };
     
-    // Create the base (a green sphere)
+    // Base with Electric Lime
     const baseGeometry = new THREE.SphereGeometry(0.6, 8, 8);
     const baseMaterial = new THREE.MeshToonMaterial({
-      color: 0x228B22,
+      color: 0xCCFF00, // Electric Lime
       flatShading: true
     });
     const base = new THREE.Mesh(baseGeometry, baseMaterial);
@@ -550,7 +546,7 @@ export class Game {
     const vinesCount = 5;
     const vineGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 4);
     const vineMaterial = new THREE.MeshToonMaterial({
-      color: 0x006400,
+      color: 0x00FFC1, // Neon Teal
       flatShading: true
     });
     
@@ -575,7 +571,7 @@ export class Game {
     // Add some leaf details (flat circles)
     const leafGeometry = new THREE.CircleGeometry(0.2, 5);
     const leafMaterial = new THREE.MeshToonMaterial({
-      color: 0x32CD32,
+      color: 0xCCFF00, // Electric Lime
       flatShading: true,
       side: THREE.DoubleSide
     });
@@ -600,7 +596,9 @@ export class Game {
     
     // Add eyes
     const eyeGeometry = new THREE.SphereGeometry(0.1, 6, 6);
-    const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
+    const eyeMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0xFF007F // Vivid Magenta
+    });
     
     const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
     leftEye.position.set(0.3, 0.2, 0.4);
@@ -690,35 +688,33 @@ export class Game {
    * @param {Object} position - Position {x, z}
    */
   createLootMesh(id, type, position) {
-    // Only create if we have scene access
     if (typeof scene === 'undefined') return;
     
-    // Create a group for the loot item
     const lootMesh = new THREE.Group();
     lootMesh.userData = { lootId: id, type: type };
     
-    // Get color and shape based on loot type
+    // Updated color palette for loot items
     let geometry, material, color;
     
     switch (type) {
       case 'doubleMove':
         geometry = new THREE.IcosahedronGeometry(0.3, 0);
-        color = 0x00FFFF; // Cyan
+        color = 0x00FFC1; // Neon Teal
         break;
         
       case 'petalShield':
         geometry = new THREE.SphereGeometry(0.3, 8, 8);
-        color = 0xFF69B4; // Pink
+        color = 0xFF007F; // Vivid Magenta
         break;
         
       case 'vineTrap':
         geometry = new THREE.OctahedronGeometry(0.3, 0);
-        color = 0x32CD32; // Lime green
+        color = 0xCCFF00; // Electric Lime
         break;
         
       default:
         geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-        color = 0xFFFFFF; // White
+        color = 0x8E8EA8; // Soft Gray-Purple
     }
     
     material = new THREE.MeshToonMaterial({

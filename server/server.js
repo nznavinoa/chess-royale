@@ -13,10 +13,41 @@ const io = new Server(server);
 // Serve static files from the client directory
 app.use(express.static(path.join(__dirname, '../client')));
 
+// Also serve node_modules directory for Three.js and other dependencies
+app.use('/node_modules', express.static(path.join(__dirname, '../node_modules')));
+
 // Game state
 const players = new Map();
 const eventLog = [];
 const gameStartTime = Date.now();
+
+// Define traditional chess positions (board coordinates 0-7)
+const traditionalPositions = {
+  'white': {
+    'pawn': [{x: 0, z: 6}, {x: 1, z: 6}, {x: 2, z: 6}, {x: 3, z: 6}, 
+             {x: 4, z: 6}, {x: 5, z: 6}, {x: 6, z: 6}, {x: 7, z: 6}],
+    'rook': [{x: 0, z: 7}, {x: 7, z: 7}],
+    'knight': [{x: 1, z: 7}, {x: 6, z: 7}],
+    'bishop': [{x: 2, z: 7}, {x: 5, z: 7}],
+    'queen': [{x: 3, z: 7}],
+    'king': [{x: 4, z: 7}]
+  },
+  'black': {
+    'pawn': [{x: 0, z: 1}, {x: 1, z: 1}, {x: 2, z: 1}, {x: 3, z: 1}, 
+             {x: 4, z: 1}, {x: 5, z: 1}, {x: 6, z: 1}, {x: 7, z: 1}],
+    'rook': [{x: 0, z: 0}, {x: 7, z: 0}],
+    'knight': [{x: 1, z: 0}, {x: 6, z: 0}],
+    'bishop': [{x: 2, z: 0}, {x: 5, z: 0}],
+    'queen': [{x: 3, z: 0}],
+    'king': [{x: 4, z: 0}]
+  }
+};
+
+// Track which positions have already been assigned
+const assignedPositions = {
+  'white': {},
+  'black': {}
+};
 
 // Game settings
 const gameSettings = {
@@ -30,17 +61,48 @@ const gameSettings = {
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
   
-  // Handle player registration
-  socket.on('register', (data) => {
-    console.log('Player registered:', data);
+  // Handle piece assignment request
+  socket.on('requestPieceAssignment', (data) => {
+    // Assign a team - alternate white and black to keep teams balanced
+    const playerCount = players.size;
+    const team = playerCount % 2 === 0 ? 'white' : 'black';
+    
+    // Find an available position for this team
+    const assignedPiece = assignPieceFromTraditionalPosition(team);
+    
+    if (assignedPiece) {
+      // Send the assignment to the client
+      socket.emit('pieceAssignment', {
+        id: socket.id,
+        type: assignedPiece.type,
+        team: team,
+        position: assignedPiece.position
+      });
+    } else {
+      // All traditional positions are taken, assign a random position
+      const randomType = getRandomPieceType();
+      const randomPosition = getRandomPosition();
+      
+      socket.emit('pieceAssignment', {
+        id: socket.id,
+        type: randomType,
+        team: team,
+        position: randomPosition
+      });
+    }
+  });
+  
+  // Handle piece assignment confirmation
+  socket.on('confirmPieceAssignment', (data) => {
+    console.log('Piece assignment confirmed:', data);
     
     // Initialize player data
     players.set(data.id, {
       id: data.id,
-      type: data.type || 'pawn',
-      team: data.team || 'white',
-      position: data.position || { x: 0, z: 0 },
-      hp: data.hp || 5,
+      type: data.type,
+      team: data.team,
+      position: data.position,
+      hp: data.hp || getBaseHp(data.type),
       effects: [],
       lastMoveTime: Date.now(),
       respawning: false
@@ -70,12 +132,6 @@ io.on('connection', (socket) => {
         // Update player position
         player.position = data.position;
         player.lastMoveTime = Date.now();
-        
-        // Check for loot collection
-        checkLootCollection(player);
-        
-        // Check for collisions with other players
-        checkPlayerCollisions(player);
         
         // Broadcast updated player state
         io.emit('update', Object.fromEntries(players));
@@ -136,7 +192,19 @@ io.on('connection', (socket) => {
   // Handle disconnection
   socket.on('disconnect', () => {
     console.log('Player disconnected:', socket.id);
+    
+    // Get the player data before deleting
+    const player = players.get(socket.id);
+    
+    // Remove player from the game
     players.delete(socket.id);
+    
+    // Free up the assigned position if the player had one
+    if (player && player.team && player.type && player.position) {
+      releaseAssignedPosition(player.team, player.type, player.position);
+    }
+    
+    // Update all clients
     io.emit('update', Object.fromEntries(players));
   });
   
@@ -153,15 +221,77 @@ io.on('connection', (socket) => {
     // Broadcast to all players
     io.emit('gameEvent', eventData);
   });
-  
-  // Handle loot collection
-  socket.on('lootCollect', (data) => {
-    console.log('Loot collected:', data);
-    
-    // Broadcast to all players
-    io.emit('lootCollect', data);
-  });
 });
+
+/**
+ * Assign a piece from traditional chess positions
+ * @param {string} team - The team ('white' or 'black')
+ * @returns {Object|null} - The assigned piece type and position or null if all positions are taken
+ */
+function assignPieceFromTraditionalPosition(team) {
+  // Initialize the assigned positions tracking if it doesn't exist
+  if (!assignedPositions[team]) {
+    assignedPositions[team] = {};
+  }
+  
+  // Try to find an unassigned position
+  for (const pieceType in traditionalPositions[team]) {
+    // Initialize tracking for this piece type if needed
+    if (!assignedPositions[team][pieceType]) {
+      assignedPositions[team][pieceType] = Array(traditionalPositions[team][pieceType].length).fill(false);
+    }
+    
+    // Check if any positions are still available for this piece type
+    const availablePositionIndex = assignedPositions[team][pieceType].findIndex(isAssigned => !isAssigned);
+    
+    if (availablePositionIndex !== -1) {
+      // Mark this position as assigned
+      assignedPositions[team][pieceType][availablePositionIndex] = true;
+      
+      // Return the piece type and position
+      return {
+        type: pieceType,
+        position: traditionalPositions[team][pieceType][availablePositionIndex]
+      };
+    }
+  }
+  
+  // All positions are taken
+  return null;
+}
+
+/**
+ * Release an assigned position
+ * @param {string} team - The team
+ * @param {string} pieceType - The piece type
+ * @param {Object} position - The position to release
+ */
+function releaseAssignedPosition(team, pieceType, position) {
+  // Check if we have this team and piece type tracked
+  if (!assignedPositions[team] || !assignedPositions[team][pieceType]) {
+    return;
+  }
+  
+  // Find the position in the traditional positions
+  const positions = traditionalPositions[team][pieceType];
+  const positionIndex = positions.findIndex(pos => 
+    pos.x === position.x && pos.z === position.z
+  );
+  
+  // If found, mark it as unassigned
+  if (positionIndex !== -1) {
+    assignedPositions[team][pieceType][positionIndex] = false;
+  }
+}
+
+/**
+ * Get a random piece type
+ * @returns {string} - A random piece type
+ */
+function getRandomPieceType() {
+  const pieceTypes = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'];
+  return pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
+}
 
 /**
  * Validate a player's move request
@@ -180,21 +310,117 @@ function validateMove(player, newPosition) {
     return false;
   }
   
-  // Check movement distance (simple for now)
+  // Check movement distance based on piece type
   const distX = Math.abs(newPosition.x - player.position.x);
   const distZ = Math.abs(newPosition.z - player.position.z);
   
-  // Basic distance check (1 square in any direction)
-  // Could be expanded with chess-specific move validation later
-  if (distX > 1 || distZ > 1) {
-    // Exception for knight
-    if (player.type === 'knight' && ((distX === 2 && distZ === 1) || (distX === 1 && distZ === 2))) {
-      return true;
+  // Different rules for different piece types
+  switch (player.type) {
+    case 'pawn':
+      // Pawns move forward (z direction changes based on team)
+      const forwardDirection = player.team === 'white' ? -1 : 1;
+      const isStartingPosition = 
+        (player.team === 'white' && player.position.z === 6) ||
+        (player.team === 'black' && player.position.z === 1);
+      
+      // Forward movement (1 square, or 2 from starting position)
+      if (distX === 0) {
+        const zChange = newPosition.z - player.position.z;
+        // Check direction is correct and distance is valid
+        if (Math.sign(zChange) === forwardDirection) {
+          if (Math.abs(zChange) === 1) return true;
+          if (isStartingPosition && Math.abs(zChange) === 2) return true;
+        }
+      }
+      // Diagonal capture (must have a piece to capture)
+      else if (distX === 1 && distZ === 1) {
+        const zChange = newPosition.z - player.position.z;
+        if (Math.sign(zChange) === forwardDirection) {
+          return isPositionOccupied(newPosition, player.team); // Can only move diagonally to capture
+        }
+      }
+      return false;
+      
+    case 'rook':
+      // Rooks move in straight lines
+      return (distX === 0 || distZ === 0) && !isPathBlocked(player.position, newPosition);
+      
+    case 'knight':
+      // Knights move in L-shape (2 in one direction, 1 in perpendicular direction)
+      return (distX === 2 && distZ === 1) || (distX === 1 && distZ === 2);
+      
+    case 'bishop':
+      // Bishops move diagonally
+      return distX === distZ && !isPathBlocked(player.position, newPosition);
+      
+    case 'queen':
+      // Queens move like rooks or bishops
+      return ((distX === 0 || distZ === 0) || distX === distZ) && !isPathBlocked(player.position, newPosition);
+      
+    case 'king':
+      // Kings move 1 square in any direction
+      return distX <= 1 && distZ <= 1;
+      
+    default:
+      // Default simple distance check (1 square in any direction)
+      return distX <= 1 && distZ <= 1;
+  }
+}
+
+/**
+ * Check if a path is blocked by other pieces
+ * @param {Object} start - Starting position
+ * @param {Object} end - Ending position
+ * @returns {boolean} - Whether the path is blocked
+ */
+function isPathBlocked(start, end) {
+  // Get the direction of movement
+  const dirX = end.x > start.x ? 1 : (end.x < start.x ? -1 : 0);
+  const dirZ = end.z > start.z ? 1 : (end.z < start.z ? -1 : 0);
+  
+  // Check each position along the path
+  let currX = start.x + dirX;
+  let currZ = start.z + dirZ;
+  
+  while (currX !== end.x || currZ !== end.z) {
+    if (isAnyPieceAt({ x: currX, z: currZ })) {
+      return true; // Path is blocked
     }
-    return false;
+    
+    currX += dirX;
+    currZ += dirZ;
   }
   
-  return true;
+  return false;
+}
+
+/**
+ * Check if any piece is at the given position
+ * @param {Object} position - Position to check
+ * @returns {boolean} - Whether a piece is at the position
+ */
+function isAnyPieceAt(position) {
+  for (const [id, player] of players.entries()) {
+    if (player.position.x === position.x && player.position.z === position.z) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if a position is occupied by an opponent
+ * @param {Object} position - Position to check
+ * @param {string} team - The team checking
+ * @returns {boolean} - Whether an opponent's piece is at the position
+ */
+function isPositionOccupied(position, team) {
+  for (const [id, player] of players.entries()) {
+    if (player.position.x === position.x && player.position.z === position.z && player.team !== team) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -296,48 +522,6 @@ function getRandomPosition() {
     z: Math.floor(Math.random() * 8)
   };
 }
-
-/**
- * Check for loot collection at player's position
- * @param {Object} player - Player data
- */
-function checkLootCollection(player) {
-  // This would check against server-side loot items
-  // We're letting clients handle loot for simplicity in this example
-}
-
-/**
- * Check for collisions with other players
- * @param {Object} player - Player data
- */
-function checkPlayerCollisions(player) {
-  // Basic collision detection
-  players.forEach((otherPlayer, id) => {
-    if (id !== player.id &&
-        otherPlayer.position.x === player.position.x &&
-        otherPlayer.position.z === player.position.z) {
-      
-      // Handle piece capture/collision based on chess rules
-      // For now, just a simple interaction
-      // In a full implementation, you'd apply chess capture rules
-      
-      // If it's an opponent, handle combat
-      if (otherPlayer.team !== player.team) {
-        // For simplicity, just log the collision
-        console.log(`Collision between ${player.id} and ${id}`);
-      }
-    }
-  });
-}
-
-// Game update loop (runs every second)
-setInterval(() => {
-  // Update game state
-  // For example, handle AI-controlled neutral entities or time-based events
-  
-  // Send updates to clients if anything changed
-  // io.emit('update', Object.fromEntries(players));
-}, 1000);
 
 // Start the server
 const PORT = process.env.PORT || 3000;

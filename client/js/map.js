@@ -28,7 +28,7 @@ function createChessBoard(map) {
       
       // Create material with appropriate color
       const tileMaterial = new THREE.MeshToonMaterial({
-        color: isWhite ? 0x6B8E23 : 0x87CEEB, // Mossy Green or Sky Blue
+        color: isWhite ? 0x8E8EA8 : 0x1A1A3D, // Soft Gray-Purple or Deep Midnight Blue
       });
       
       // Create mesh and position it
@@ -59,7 +59,7 @@ function createChessBoard(map) {
   }
   
   // Add a border around the board
-  const borderMaterial = new THREE.MeshToonMaterial({ color: 0x8B4513 }); // Wood color
+  const borderMaterial = new THREE.MeshToonMaterial({ color: 0xFF007F }); // Vivid Magenta
   
   // North border
   const northBorder = new THREE.Mesh(
@@ -102,7 +102,7 @@ function addTileDecoration(tile, isWhite) {
   if (isWhite) {
     // Grass tuft for green tiles
     const grassGeometry = new THREE.ConeGeometry(0.05, 0.1, 4);
-    const grassMaterial = new THREE.MeshToonMaterial({ color: 0x9ACD32 });
+    const grassMaterial = new THREE.MeshToonMaterial({ color: 0xCCFF00 }); // Electric Lime
     
     // Add a small cluster of grass blades
     const grassCount = Math.floor(Math.random() * 3) + 1;
@@ -126,7 +126,7 @@ function addTileDecoration(tile, isWhite) {
     // Small pebble for blue tiles
     if (Math.random() < 0.4) {
       const pebbleGeometry = new THREE.SphereGeometry(0.05, 4, 4);
-      const pebbleMaterial = new THREE.MeshToonMaterial({ color: 0xC0C0C0 });
+      const pebbleMaterial = new THREE.MeshToonMaterial({ color: 0x00FFC1 }); // Neon Teal
       
       const pebble = new THREE.Mesh(pebbleGeometry, pebbleMaterial);
       
@@ -153,7 +153,7 @@ function addEnvironmentDecoration(map) {
     const hillHeight = Math.random() * 1.5 + 0.5;
     
     const hillGeometry = new THREE.SphereGeometry(hillSize, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
-    const hillMaterial = new THREE.MeshToonMaterial({ color: 0x6B8E23 }); // Mossy green
+    const hillMaterial = new THREE.MeshToonMaterial({ color: 0x8E8EA8 }); // Soft Gray-Purple
     
     const hill = new THREE.Mesh(hillGeometry, hillMaterial);
     
@@ -183,9 +183,9 @@ function addEnvironmentDecoration(map) {
       const puffSize = Math.random() * 1 + 0.5;
       const puffGeometry = new THREE.SphereGeometry(puffSize, 7, 5);
       const puffMaterial = new THREE.MeshToonMaterial({ 
-        color: 0xFFFFFF,
+        color: 0x8E8EA8, // Soft Gray-Purple
         transparent: true,
-        opacity: 0.8
+        opacity: 0.5
       });
       
       const puff = new THREE.Mesh(puffGeometry, puffMaterial);

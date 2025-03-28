@@ -6,57 +6,230 @@
     body { 
       margin: 0; 
       overflow: hidden; 
-      font-family: Arial, sans-serif;
+      font-family: 'Orbitron', sans-serif;
+      background-color: #1A1A3D; /* Deep Midnight Blue */
     }
+    
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+    
     #ui {
       position: absolute;
       bottom: 20px;
       left: 20px;
-      color: white;
-      background-color: rgba(0,0,0,0.5);
-      padding: 10px;
-      border-radius: 5px;
+      color: #00FFC1; /* Neon Teal */
+      background-color: rgba(26, 26, 61, 0.7); /* Deep Midnight Blue with transparency */
+      padding: 15px;
+      border-radius: 8px;
+      border: 2px solid #FF007F; /* Vivid Magenta */
+      box-shadow: 0 0 10px #00FFC1, inset 0 0 5px #00FFC1; /* Neon Teal glow */
+      backdrop-filter: blur(5px);
     }
+    
+    #pieceInfo {
+      margin-bottom: 8px;
+      font-weight: bold;
+      text-shadow: 0 0 5px #00FFC1; /* Neon Teal glow */
+    }
+    
     #healthBar {
-      width: 100px;
-      height: 10px;
-      background-color: #333;
+      width: 120px;
+      height: 12px;
+      background-color: #8E8EA8; /* Soft Gray-Purple */
       margin-top: 5px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #8E8EA8;
     }
+    
     #health {
       height: 100%;
-      background-color: #4CAF50;
+      background-color: #00FFC1; /* Neon Teal */
       width: 100%;
+      border-radius: 4px;
+      box-shadow: 0 0 5px #00FFC1; /* Neon glow */
+      transition: width 0.3s ease;
     }
+    
     #cooldown {
-      height: 5px;
-      background-color: #2196F3;
+      height: 6px;
+      background-color: #FF007F; /* Vivid Magenta */
       width: 0%;
       transition: width 0.1s linear;
+      margin-top: 3px;
+      border-radius: 3px;
+      box-shadow: 0 0 5px #FF007F; /* Neon glow */
     }
+    
+    #moveHelp {
+      margin-top: 10px; 
+      font-size: 12px;
+      color: #CCFF00; /* Electric Lime */
+      text-shadow: 0 0 3px #CCFF00; /* Electric Lime glow */
+    }
+    
     #gameInfo {
       position: absolute;
       top: 20px;
       right: 20px;
-      color: white;
-      background-color: rgba(0,0,0,0.5);
-      padding: 10px;
-      border-radius: 5px;
+      color: #00FFC1; /* Neon Teal */
+      background-color: rgba(26, 26, 61, 0.7); /* Deep Midnight Blue with transparency */
+      padding: 15px;
+      border-radius: 8px;
+      border: 2px solid #FF007F; /* Vivid Magenta */
+      box-shadow: 0 0 10px #00FFC1, inset 0 0 5px #00FFC1; /* Neon Teal glow */
+      backdrop-filter: blur(5px);
+    }
+    
+    #timer {
+      font-weight: bold;
+    }
+    
+    #nextEvent {
+      margin-top: 5px;
+      color: #8E8EA8; /* Soft Gray-Purple */
+    }
+    
+    #activeEvents {
+      margin-top: 8px;
+      color: #CCFF00; /* Electric Lime */
+      text-shadow: 0 0 3px #CCFF00; /* Electric Lime glow */
+    }
+    
+    .game-title {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #00FFC1; /* Neon Teal */
+      font-family: 'Orbitron', sans-serif;
+      font-size: 24px;
+      text-shadow: 0 0 10px #00FFC1, 0 0 20px #00FFC1; /* Neon glow */
+      letter-spacing: 2px;
+    }
+    
+    .game-title span {
+      color: #FF007F; /* Vivid Magenta */
+      text-shadow: 0 0 10px #FF007F, 0 0 20px #FF007F; /* Neon glow */
+    }
+    
+    /* Controls panel */
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      color: #00FFC1; /* Neon Teal */
+      background-color: rgba(26, 26, 61, 0.7); /* Deep Midnight Blue with transparency */
+      padding: 15px;
+      border-radius: 8px;
+      border: 2px solid #FF007F; /* Vivid Magenta */
+      box-shadow: 0 0 10px #00FFC1, inset 0 0 5px #00FFC1; /* Neon Teal glow */
+      backdrop-filter: blur(5px);
+      font-size: 12px;
+    }
+    
+    #controls h3 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: #CCFF00; /* Electric Lime */
+      text-shadow: 0 0 3px #CCFF00; /* Electric Lime glow */
+    }
+    
+    .key {
+      display: inline-block;
+      background-color: #8E8EA8; /* Soft Gray-Purple */
+      color: #1A1A3D; /* Deep Midnight Blue */
+      padding: 3px 6px;
+      border-radius: 4px;
+      margin-right: 5px;
+      font-weight: bold;
+      box-shadow: 0 0 5px #8E8EA8; /* Soft glow */
+    }
+    
+    /* Loading screen */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #1A1A3D; /* Deep Midnight Blue */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    #loading-logo {
+      font-size: 48px;
+      font-family: 'Orbitron', sans-serif;
+      color: #00FFC1; /* Neon Teal */
+      text-shadow: 0 0 10px #00FFC1, 0 0 20px #00FFC1; /* Neon glow */
+      margin-bottom: 30px;
+      letter-spacing: 3px;
+    }
+    
+    #loading-logo span {
+      color: #FF007F; /* Vivid Magenta */
+      text-shadow: 0 0 10px #FF007F, 0 0 20px #FF007F; /* Neon glow */
+    }
+    
+    #loading-bar-container {
+      width: 300px;
+      height: 20px;
+      background-color: #8E8EA8; /* Soft Gray-Purple */
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 0 15px #00FFC1; /* Neon Teal glow */
+    }
+    
+    #loading-bar {
+      height: 100%;
+      width: 0%;
+      background-color: #FF007F; /* Vivid Magenta */
+      transition: width 0.3s ease;
+      box-shadow: 0 0 10px #FF007F, inset 0 0 5px #FF007F; /* Neon glow */
+    }
+    
+    #loading-text {
+      margin-top: 15px;
+      color: #CCFF00; /* Electric Lime */
+      font-family: 'Orbitron', sans-serif;
+      text-shadow: 0 0 5px #CCFF00; /* Electric Lime glow */
     }
   </style>
 </head>
 <body>
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div id="loading-logo">CHESS <span>ROYALE</span></div>
+    <div id="loading-bar-container">
+      <div id="loading-bar"></div>
+    </div>
+    <div id="loading-text">Loading Checkmate Arena...</div>
+  </div>
+
+  <div class="game-title">CHESS <span>ROYALE</span></div>
+  
   <div id="ui">
     <div id="pieceInfo">Pawn (White)</div>
     <div id="healthBar"><div id="health"></div></div>
     <div id="cooldown"></div>
-    <div id="moveHelp" style="margin-top: 10px; font-size: 12px;">Click a piece to see valid moves</div>
+    <div id="moveHelp">Click a piece to see valid moves</div>
   </div>
+  
   <div id="gameInfo">
     <div id="timer">Time: 0:00</div>
     <div id="nextEvent">Next Event: 3:00</div>
     <div id="activeEvents"></div>
   </div>
+  
+  <div id="controls">
+    <h3>CONTROLS</h3>
+    <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> Move</div>
+    <div><span class="key">SPACE</span> Use Ability</div>
+    <div><span class="key">MOUSE</span> Rotate Camera</div>
+  </div>
+  
   <script src="/socket.io/socket.io.js"></script>
   <script type="importmap">
     {
@@ -67,5 +240,35 @@
     }
   </script>
   <script type="module" src="js/main.js"></script>
+  
+  <!-- Loading animation script -->
+  <script>
+    // Simulate loading progress
+    document.addEventListener('DOMContentLoaded', () => {
+      const loadingBar = document.getElementById('loading-bar');
+      const loadingScreen = document.getElementById('loading-screen');
+      let progress = 0;
+      
+      // Simulate loading process
+      const interval = setInterval(() => {
+        progress += Math.random() * 10;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(interval);
+          
+          // Hide loading screen when loading is complete
+          setTimeout(() => {
+            loadingScreen.style.opacity = '0';
+            loadingScreen.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => {
+              loadingScreen.style.display = 'none';
+            }, 500);
+          }, 500);
+        }
+        
+        loadingBar.style.width = `${progress}%`;
+      }, 200);
+    });
+  </script>
 </body>
 </html>
